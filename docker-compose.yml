@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mariadb:
+    image: mariadb:11.4  # Using a stable LTS version
+    container_name: mariadb_db
+    restart: always
+    environment:
+      # MariaDB supports both MYSQL_ and MARIADB_ prefixes
+      MARIADB_ROOT_PASSWORD: rootpassword
+      MARIADB_DATABASE: my_database
+      MARIADB_USER: user          # Optional: Add a non-root user
+      MARIADB_PASSWORD: user  # Optional: Add a password for the user
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+  # phpMyAdmin (Web interface for MySQL)
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: phpmyadmin_gui
+    restart: always
+    depends_on:
+      - mariadb 
+    environment:
+      PMA_HOST: mariadb
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 256M # This increases the import size limit
+    ports:
+      - "8080:80" # Accessible at http://localhost:8080
+
+  # Redis (In-memory data store)
+  redis:
+    image: redis:latest
+    container_name: redis_cache
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # MinIO (Object Storage / S3 Compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: minio_s3
+    restart: always
+    ports:
+      - "9000:9000" # API Port
+      - "9001:9001" # Console/UI Port
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  # Portainer (Docker Management GUI)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer_gui
+    restart: always
+    ports:
+      - "9443:9443" # HTTPS access
+      - "354:9000" # HTTP access (Standard Portainer port)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
+volumes:
+  mariadb_data:
+  minio_data:
+  portainer_data:

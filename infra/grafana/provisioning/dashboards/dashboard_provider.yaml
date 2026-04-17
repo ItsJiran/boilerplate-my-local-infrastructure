@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: 'Default'            # Provider Name
+    orgId: 1
+    folder: 'General'          # Folder name in Grafana UI
+    type: file
+    disableDeletion: true      # Prevent deletion from UI
+    updateIntervalSeconds: 10  # Check for file changes every 10s
+    options:
+      path: /etc/grafana/provisioning/dashboards/json_files

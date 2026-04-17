@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+
+  grafana:
+    image: grafana/grafana:latest
+    env_file:
+      - ../.env
+      - ../.env.backend
+      - ../.env.devops
+    deploy:
+      resources:
+        limits:
+          cpus: '${GRAFANA_CPU_LIMIT:-0}'
+          memory: '${GRAFANA_MEM_LIMIT:-0b}'
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    volumes:
+      - .docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - .docker/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - app
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"    # Maksimal 5 Megabyte per file
+        max-file: "2"     # Maksimal 2 file (total 10MB)
+
+  loki:
+    image: grafana/loki:latest
+    env_file:
+      - ../.env
+      - ../.env.backend
+      - ../.env.devops
+    ports:
+      - "${LOKI_PORT}:${LOKI_PORT}"
+    deploy:
+      resources:
+        limits:
+          cpus: '${LOKI_CPU_LIMIT:-0}'
+          memory: '${LOKI_MEM_LIMIT:-0b}'
+    volumes:
+      - ./loki.config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml -config.expand-env=true
+    networks:
+      - app_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"    # Maksimal 5 Megabyte per file
+        max-file: "2"     # Maksimal 2 file (total 10MB)
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '${PROMETHEUS_CPU_LIMIT:-0}'
+          memory: '${PROMETHEUS_MEM_LIMIT:-0b}'
+    env_file:
+      - ../.env
+      - ../.env.backend
+      - ../.env.devops
+    ports:
+      # Port 9090 untuk akses Dashboard Prometheus
+      # Sebaiknya diblock firewall di production, hanya allow IP Monitoring/VPN
+      - "${PROMETHEUS_PORT}:9090"
+    volumes:
+      # Mount file konfigurasi
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Mount file rules alert (opsional)
+      # - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      # Persistance Data (Agar data grafik tidak hilang saat restart)
+      - prometheus_data:/prometheus
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        # Instal gettext untuk dapat command envsubst (jika image support)
+        # Atau gunakan image custom yang sudah ada envsubst
+        echo "Mengganti variable..."
+        envsubst < /etc/prometheus/prometheus.tmpl > /etc/prometheus/prometheus.yml
+        
+        echo "Menjalankan Prometheus..."
+        /bin/prometheus --config.file=/etc/prometheus/prometheus.yml
+    networks:
+      - app_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"    # Maksimal 5 Megabyte per file
+        max-file: "2"     # Maksimal 2 file (total 10MB)
+      
+volumes:
+  prometheus_data:
+    driver: local
+    name: ${APP_SLUG:-app-boilerplate}-prometheus-data
+  grafana_data:
+    driver: local
+    name: ${APP_SLUG:-app-boilerplate}-grafana-data
+  loki_data:       # Volume baru untuk data Loki
+    driver: local
+    name: ${APP_SLUG:-app-boilerplate}-loki-data
+
+networks:
+  app_network:
+    name: ${APP_NETWORK:-app_boilerplate_network}
+    external: true

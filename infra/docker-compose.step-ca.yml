@@ -1,0 +1,74 @@
+# =============================================================================
+# Step CA (Certificate Authority) Docker Compose - DEVELOPMENT ONLY
+# =============================================================================
+# 
+# ⚠️  IMPORTANT: This is for DEVELOPMENT environment only!
+#    Production uses Let's Encrypt for SSL certificates.
+#
+# Step CA is an open-source certificate authority server that provides:
+# - Automated certificate management for local development
+# - ACME protocol support (similar to Let's Encrypt)
+# - Custom PKI infrastructure
+# - Certificate lifecycle management
+#
+# Usage:
+#   ./scripts/run/run.step-ca.sh
+#   OR
+#   cd infra && docker-compose -f docker-compose.step-ca.yml up -d
+#
+# Access:
+#   https://localhost:9000 (default)
+#
+# Documentation:
+#   https://smallstep.com/docs/step-ca
+# =============================================================================
+
+version: '3.8'
+
+services:
+  step-ca:
+    image: smallstep/step-ca:latest
+    container_name: ${APP_SLUG:-app-boilerplate}-step-ca
+    restart: unless-stopped
+    
+    ports:
+      - "${STEP_CA_PORT:-9000}:${STEP_CA_PORT:-9000}"
+    
+    environment:
+      # Step CA Configuration
+      - DOCKER_STEPCA_INIT_NAME=${STEP_CA_NAME:-App CA}
+      - DOCKER_STEPCA_INIT_DNS_NAMES=${STEP_CA_DNS:-step-ca,localhost}
+      - DOCKER_STEPCA_INIT_PROVISIONER_NAME=${STEP_CA_PROVISIONER:-admin}
+      - DOCKER_STEPCA_INIT_PASSWORD=${STEP_CA_PASSWORD:-changeme}
+      - DOCKER_STEPCA_INIT_ADMIN_SUBJECT=${STEP_CA_ADMIN:-admin@jiran.test}
+      - DOCKER_STEPCA_INIT_ADDRESS=${STEP_CA_ADDRESS:-:9000}
+      - DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT=true
+      
+    volumes:
+      # Persistent storage for CA data and certificates
+      - step-ca-data:/home/step
+      - ./ssl:/ssl:rw
+      
+    networks:
+      - app_network
+    
+    healthcheck:
+      test: ["CMD", "step", "ca", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    
+    labels:
+      - "com.app-boilerplate.service=step-ca"
+      - "com.app-boilerplate.description=Certificate Authority Server"
+
+networks:
+  app_network:
+    name: ${APP_NETWORK:-app_boilerplate_network}
+    external: true
+
+volumes:
+  step-ca-data:
+    driver: local
+    name: ${APP_SLUG:-app-boilerplate}-step-ca-data

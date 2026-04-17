@@ -1,0 +1,51 @@
+auth_enabled: false
+
+server:
+  http_listen_port: ${LOKI_PORT}
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+storage_config:
+  filesystem:
+    directory: /loki/chunks
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+    - from: 2024-05-24  
+      store: tsdb       
+      object_store: filesystem  
+      schema: v13       
+      index:
+        prefix: index_
+        period: 24h
+
+compactor:
+  working_directory: /loki/compactor
+  delete_request_store: filesystem       # Use 's3', 'aws', or 'gcs' if using object storage
+  compaction_interval: 10m       # How often to check for work
+  retention_enabled: true        # ⚠️ CRITICAL: Must be true to allow deletion
+  retention_delete_delay: 2h     # Safety buffer before permanent deletion
+  retention_delete_worker_count: 150
+
+limits_config:
+  retention_period: 48h  # Keep logs for 2 days
+
+# ruler:
+  # alertmanager_url: http://localhost:9093

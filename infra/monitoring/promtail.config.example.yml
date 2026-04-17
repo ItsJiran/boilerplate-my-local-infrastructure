@@ -1,0 +1,39 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push # Arahkan ke IP VPS Pusat Anda
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        
+    pipeline_stages:
+      - docker: {} 
+      - json:      
+          expressions:
+            upstream: upstream_addr
+            status: status
+            vhost: host
+      - labels:    
+          upstream:
+          status:
+          vhost:
+
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+      
+      # --- TAMBAHAN UNTUK IDENTITAS PERANGKAT ---
+      # Menambahkan label statis agar bisa dibedakan di Loki Pusat
+      - replacement: 'main_machine' # Ganti jadi 'vps-prod' di perangkat satunya
+        target_label: 'origin_host'

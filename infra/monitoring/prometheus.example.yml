@@ -1,0 +1,81 @@
+global:
+  external_labels:
+    origin_host: 'central-server'
+
+scrape_configs:
+
+  # NODE EXPORTER - SET MANUALY
+
+  # - job_name: 'mariadb_exporter_clients'
+  #   static_configs:
+  #     - targets: 
+  #       - ['10.240.37.12:9100']  
+
+  # - job_name: 'redis_exporter_clients'
+  #   static_configs:
+  #     - targets: 
+  #       - ['10.240.37.12:9121']  
+
+  # - job_name: 'cadvisor_exporter_clients'
+  #   static_configs:
+  #     - targets: ['10.240.37.12:8080']
+
+  # - job_name: 'node_exporter_clients'
+  #   static_configs:
+  #     - targets: ['10.240.37.12:9100']    
+
+    ## --local
+
+  - job_name: 'cadvisor_monitor'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['10.240.37.12:8080']
+        labels:
+          alias: 'VPS-Client-Prod' # Nama bersih
+          role: 'worker-transaction'
+          
+      - targets: ['10.240.37.196:8080']
+        labels:
+          alias: 'VPS-Master-Self' # Nama bersih
+          role: 'master-node'
+
+  - job_name: 'node_monitor'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['10.240.37.12:9100']
+        labels:
+          alias: 'VPS-Client-Prod' # Nama bersih
+          role: 'worker-transaction'
+          
+      - targets: ['10.240.37.196:9100']
+        labels:
+          alias: 'VPS-Master-Self' # Nama bersih
+          role: 'master-node'
+
+  - job_name: 'redis_monitor'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['10.240.37.196:9121'] 
+        labels:
+              alias: 'VPS-Master-Self' # Nama bersih
+              role: 'master-node'
+  
+  - job_name: 'nginx_monitor'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['10.240.37.196:8085'] 
+        labels:
+            alias: 'VPS-Master-Self' # Nama bersih
+            role: 'master-node'
+
+  - job_name: 'mariadb_monitor'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['10.240.37.196:9104'] 
+        labels:
+            alias: 'VPS-Master-Self' # Nama bersih
+            role: 'master-node'
+
+  - job_name: 'loki'
+    static_configs:
+      - targets: ['loki:3100']

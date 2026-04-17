@@ -1,0 +1,186 @@
+services:
+  node_exporter:
+    image: prom/node-exporter:latest
+    env_file:
+        - ../.env
+        - ../.env.backend
+        - ../.env.devops
+    restart: unless-stopped
+    deploy:
+        resources:
+          limits:
+            cpus: '${NODE_EXPORTER_CPU_LIMIT:-0}'    # Only 5% of one CPU core
+            memory: '${NODE_EXPORTER_MEM_LIMIT:-0b}'    # Hard cap at 32 Megabytes
+    volumes:
+      # ====================================================
+      # WAJIB: Mount file system Host agar bisa dibaca
+      # ====================================================
+      - /proc:/host/proc:ro   # Baca proses linux (CPU/RAM)
+      - /sys:/host/sys:ro     # Baca info kernel
+      - /:/rootfs:ro          # Baca penggunaan Harddisk utama
+    command:
+      # Beritahu Node Exporter posisi root host ada di folder /rootfs
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      # PENTING: Regex ini untuk meng-ignore file system sampah milik Docker
+      # Supaya grafik Disk Space Anda akurat (hanya disk fisik)
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
+    ports:
+      # Gunakan variabel yang sudah kita bahas
+      - "${NODE_EXPORTER_ALLOWED_HOST:-127.0.0.1}:${NODE_EXPORTER_PORT:-9100}:9100"
+    networks:
+      - app_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"    # Maksimal 5 Megabyte per file
+        max-file: "2"     # Maksimal 2 file (total 10MB)
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest    
+    env_file:
+        - ../.env
+        - ../.env.backend
+        - ../.env.devops
+    deploy:
+        resources:
+          limits:
+            cpus: '${REDIS_EXPORTER_CPU_LIMIT:-0}'    # Only 5% of one CPU core
+            memory: '${REDIS_EXPORTER_MEM_LIMIT:-0b}'    # Hard cap at 32 Megabytes
+    command:
+      - "--debug"
+    ports:
+      - "${REDIS_EXPORTER_ALLOWED_HOST}:${REDIS_EXPORTER_PORT}:9121"
+    environment:
+      REDIS_ADDR: "${REDIS_HOST}:${REDIS_PORT}"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - app_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"    # Maksimal 5 Megabyte per file
+        max-file: "2"     # Maksimal 2 file (total 10MB)
+
+  mariadb-exporter:
+    image: prom/mysqld-exporter:latest    
+    env_file:
+        - ../.env
+        - ../.env.backend
+        - ../.env.devops
+    volumes:
+      - ./.docker/mysql/exporter.conf:/.my.cnf:ro
+    deploy:
+        resources:
+          limits:
+            cpus: '${MARIADB_EXPORTER_CPU_LIMIT:-0}'    # Only 5% of one CPU core
+            memory: '${MARIADB_EXPORTER_MEM_LIMIT:-0b}'    # Hard cap at 32 Megabytes
+    ports:
+      - "${MARIADB_EXPORTER_ALLOWED_HOST}:${MARIADB_EXPORTER_PORT}:9104"
+    command:
+      - '--collect.info_schema.processlist'
+      - '--collect.info_schema.innodb_metrics'
+      - '--collect.engine_innodb_status'
+    networks:
+      - app_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"    # Maksimal 5 Megabyte per file
+        max-file: "2"     # Maksimal 2 file (total 10MB)
+
+  cadvisor:
+      # Gunakan versi spesifik (v0.47.0 ke atas) lebih stabil daripada latest
+      image: gcr.io/cadvisor/cadvisor:v0.47.0      
+      env_file:
+        - ../.env
+        - ../.env.backend
+        - ../.env.devops
+      command:
+        - '--housekeeping_interval=10s'
+        - '--docker_only=true'
+        - '--disable_metrics=disk,tcp,udp,advtcp,sched,process,hugetlb'
+      deploy:
+        resources:
+          limits:
+            cpus: '${CADVISOR_EXPORTER_CPU_LIMIT:-0}'    # Only 5% of one CPU core
+            memory: '${CADVISOR_EXPORTER_MEM_LIMIT:-0b}'    # Hard cap at 32 Megabytes
+      ports:
+        # Default port cAdvisor adalah 8080. 
+        # Pastikan variabel ini ada di .env (misal: 8080)
+        - "${CADVISOR_EXPORTER_ALLOWED_HOST:-127.0.0.1}:${CADVISOR_EXPORTER_PORT:-8080}:8080"
+      volumes:
+        # Wajib mount rootfs, run, sys, dan docker lib agar bisa baca stats host
+        - /:/rootfs:ro
+        - /var/run:/var/run:rw
+        - /sys:/sys:ro
+        - /var/lib/docker/:/var/lib/docker:ro
+      networks:
+        - app_network
+      restart: unless-stopped
+      logging:
+        driver: "json-file"
+        options:
+          max-size: "5m"    # Maksimal 5 Megabyte per file
+          max-file: "2"     # Maksimal 2 file (total 10MB)
+
+  promtail:
+    image: grafana/promtail:latest    
+    user: "0"
+    env_file:
+      - ../.env
+      - ../.env.backend
+      - ../.env.devops
+    deploy:
+      resources:
+        limits:
+          cpus: '${PROMTAIL_EXPORTER_CPU_LIMIT:-0}'
+          memory: '${PROMTAIL_EXPORTER_MEM_LIMIT:-0b}'
+    volumes:
+      - ./promtail.config.yml:/etc/promtail/config.yml:ro
+      # PENTING: Mount Docker socket dan folder containers agar bisa baca log host
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yml -config.expand-env=true
+    networks:
+      - app_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"    # Maksimal 5 Megabyte per file
+        max-file: "2"     # Maksimal 2 file (total 10MB)
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest    
+    env_file:
+      - ../.env
+      - ../.env.backend
+      - ../.env.devops
+    ports:
+        # Default port cAdvisor adalah 8080. 
+        # Pastikan variabel ini ada di .env (misal: 8080)
+        - "${NGINX_EXPORTER_ALLOWED_HOST:-127.0.0.1}:${NGINX_EXPORTER_PORT:-8080}:${NGINX_EXPORTER_PORT}"
+    command:
+      - "--nginx.scrape-uri=http://load_balancer:80/stub_status"
+      - "--web.listen-address=:${NGINX_EXPORTER_PORT}"
+    deploy:
+      resources:
+        limits:
+          cpus: '${NGINX_EXPORTER_CPU_LIMIT:-0}'    # Only 5% of one CPU core
+          memory: '${NGINX_EXPORTER_MEM_LIMIT:-0b}'    # Hard cap at 32 Megabytes
+    networks:
+      - app_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"    # Maksimal 5 Megabyte per file
+        max-file: "2"     # Maksimal 2 file (total 10MB)
+
+networks:
+  app_network:
+    name: ${APP_NETWORK:-app_boilerplate_network}
+    external: true
