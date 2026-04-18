@@ -23,7 +23,7 @@ if [ ! -f .env.fill ]; then
     echo "✅ Created .env.fill from example"
 fi
 
-./setup.sh setup-env-template.sh -o .env -t infra/env/templates/app-laravel.env -E ./.env.fill -f
+./setup.sh setup-env-template.sh -o .env -t infra/env/templates/infra-local.env -E ./.env.fill -f
 # ./setup.sh setup-env-template.sh -o .env.devops -t infra/env/templates/monitoring.env -E ./.env.fill -f
 
 source ./.env
@@ -42,7 +42,7 @@ NGINX_TEMPLATE_ENV_ARGS=(
 # ----------------------------------------------------------
 # Step 3: Run the dns workflow to setup dns records for the application
 
-./run.sh run.dev.ssl.sh --domains="${APP_DOMAIN},${REVERB_DOMAIN},${HMR_DOMAIN}" --output-dir="./infra-generated/ssl"
+./run.sh run.dev.ssl.sh --domains="${PHPMYADMIN_DOMAIN},${GRAFANA_DOMAIN},${S3_DOMAIN},${S3_CONSOLE_DOMAIN},${PORTAINER_DOMAIN}" --output-dir="./infra-generated/ssl"
 
 cp ./infra-generated/ssl/*.crt /etc/nginx/ssl/
 cp ./infra-generated/ssl/*.key /etc/nginx/ssl/
