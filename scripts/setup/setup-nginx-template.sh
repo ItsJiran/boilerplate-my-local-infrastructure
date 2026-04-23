@@ -48,7 +48,7 @@ ensure_output_is_file() {
 
 usage() {
   cat <<'USAGE'
-Usage: $0 -o OUTPUT -t TEMPLATE_PATH [-t TEMPLATE_PATH ...] -v KEY=VALUE [KEY=VALUE ...] (-a | -f) [-r]
+Usage: $0 -o OUTPUT -t TEMPLATE_PATH [-t TEMPLATE_PATH ...] -v KEY=VALUE [KEY=VALUE ...] (-a | -f) [-r|--replace-if-exists]
 
 Generic nginx template renderer.
 
@@ -63,6 +63,9 @@ Options:
   -f, --force            Replace the output file with the rendered template block(s)
   -r, --replace-target   When used with -a, replace previously injected block(s)
                          for the same template instead of appending duplicates
+    --replace-if-exists Alias of --replace-target. When the same generated
+           template block already exists in the output file,
+           replace it instead of appending a duplicate.
   -h, --help             Show this help
 
 Placeholders:
@@ -77,6 +80,9 @@ Examples:
 
   Replace a previously injected block for the same template:
   $0 -o infra/nginx/default.conf.lb.template -t infra/nginx/templates/pma.conf -v PMA_DOMAIN=new-pma.app.test -a -r
+
+  Replace the same template block only if it already exists in the output:
+  $0 -o infra/nginx/default.conf.lb.template -t infra/nginx/templates/pma.conf -v PMA_DOMAIN=new-pma.app.test -a --replace-if-exists
 USAGE
 }
 
@@ -240,8 +246,8 @@ render_template() {
   done
 
   if [ "${#missing[@]}" -gt 0 ]; then
-    echo -e "${RED}[ERROR]${NC} Missing variables for $(template_id "$template_file"): ${missing[*]}"
-    exit 1
+    echo -e "${YELLOW}[WARN]${NC} Missing variables for $(template_id "$template_file"): ${missing[*]}" >&2
+    echo -e "${YELLOW}[WARN]${NC} Leaving unresolved placeholders unchanged in rendered output" >&2
   fi
 
   printf '%s\n' "$content"
@@ -369,7 +375,7 @@ while [ "$#" -gt 0 ]; do
       shift
       while [ "$#" -gt 0 ]; do
         case "$1" in
-          -o|--output|-t|--template|-E|--env-file|-v|--var|--vars|-a|--append|-f|--force|-r|--replace-target|-h|--help)
+          -o|--output|-t|--template|-E|--env-file|-v|--var|--vars|-a|--append|-f|--force|-r|--replace-target|--replace-if-exists|-h|--help)
             break
             ;;
           *)
@@ -396,6 +402,10 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     -r|--replace-target)
+      REPLACE_TARGET=1
+      shift
+      ;;
+    --replace-if-exists)
       REPLACE_TARGET=1
       shift
       ;;

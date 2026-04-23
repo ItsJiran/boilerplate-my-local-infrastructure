@@ -4,7 +4,6 @@ services:
   # MySQL Database
   mariadb:
     image: mariadb:11.4  # Using a stable LTS version
-    container_name: mariadb_db
     restart: always
     environment:
       # MariaDB supports both MYSQL_ and MARIADB_ prefixes
@@ -13,14 +12,13 @@ services:
       MARIADB_USER: user          # Optional: Add a non-root user
       MARIADB_PASSWORD: user  # Optional: Add a password for the user
     ports:
-      - "3306:3306"
+      - "${MARIADB_PORT:-3306}:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
 
   # phpMyAdmin (Web interface for MySQL)
   phpmyadmin:
     image: phpmyadmin:latest
-    container_name: phpmyadmin_gui
     restart: always
     depends_on:
       - mariadb 
@@ -29,7 +27,7 @@ services:
       PMA_PORT: 3306
       UPLOAD_LIMIT: 256M # This increases the import size limit
     ports:
-      - "8080:80" # Accessible at http://localhost:8080
+      - "${PHPMYADMIN_PORT:-8080}:80" # Accessible at http://localhost:8080
 
   # Redis (In-memory data store)
   redis:
@@ -37,37 +35,83 @@ services:
     container_name: redis_cache
     restart: always
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
   # MinIO (Object Storage / S3 Compatible)
   minio:
     image: minio/minio:latest
-    container_name: minio_s3
     restart: always
     ports:
-      - "9000:9000" # API Port
-      - "9001:9001" # Console/UI Port
+      - "8888:8888" # API Port
+      - "8889:8889" # Console/UI Port
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     volumes:
-      - minio_data:/data
-    command: server /data --console-address ":9001"
+      - minio_data:/data    
+    command: server /data --address ":8888" --console-address ":8889"
+
+  # Step CA (Development Certificate Authority)
+  step-ca:
+    image: smallstep/step-ca:latest
+    container_name: ${APP_SLUG:-app-boilerplate}-step-ca
+    restart: unless-stopped
+    command: ["/bin/sh", "/bootstrap/set-ca-claims.sh"]
+    ports:
+      - "${STEP_CA_PORT:-9000}:${STEP_CA_PORT:-9000}"
+    environment:
+      - DOCKER_STEPCA_INIT_NAME=${STEP_CA_NAME:-App CA}
+      - DOCKER_STEPCA_INIT_DNS_NAMES=${STEP_CA_DNS:-step-ca,localhost}
+      - DOCKER_STEPCA_INIT_PROVISIONER_NAME=${STEP_CA_PROVISIONER:-admin}
+      - DOCKER_STEPCA_INIT_PASSWORD=${STEP_CA_PASSWORD:-changeme}
+      - DOCKER_STEPCA_INIT_ADMIN_SUBJECT=${STEP_CA_ADMIN:-admin@jiran.test}
+      - DOCKER_STEPCA_INIT_ADDRESS=${STEP_CA_ADDRESS:-:9000}
+      - DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT=true
+      - STEP_CA_MIN_TLS_CERT_DURATION=${STEP_CA_MIN_TLS_CERT_DURATION:-1h}
+      - STEP_CA_MAX_TLS_CERT_DURATION=${STEP_CA_MAX_TLS_CERT_DURATION:-2160h}
+      - STEP_CA_DEFAULT_TLS_CERT_DURATION=${STEP_CA_DEFAULT_TLS_CERT_DURATION:-2160h}
+    volumes:
+      - step-ca-data:/home/step
+      - ./infra/ssl:/ssl:rw
+      - ./infra/step-ca/set-ca-claims.sh:/bootstrap/set-ca-claims.sh:ro
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "step", "ca", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "com.app-boilerplate.service=step-ca"
+      - "com.app-boilerplate.description=Certificate Authority Server"
 
   # Portainer (Docker Management GUI)
   portainer:
     image: portainer/portainer-ce:latest
-    container_name: portainer_gui
     restart: always
     ports:
-      - "9443:9443" # HTTPS access
-      - "354:9000" # HTTP access (Standard Portainer port)
+      - "${PORTAINER_HTTPS_PORT:-9443}:9443" # HTTPS access
+      - "${PORTAINER_PORT:-9000}:9000" # HTTP access (Standard Portainer port)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
-    
 
 volumes:
   mariadb_data:
+    name: projects_mariadb_data
+    external: true
   minio_data:
+    name: projects_minio_data 
+    external: true
   portainer_data:
+    name: projects_portainer_data
+    external: true
+  step-ca-data:
+    name: projects_step_ca_data
+    external: true
+
+networks:
+  app_network:
+    name: ${APP_NETWORK:-app_boilerplate_network}
+    external: true

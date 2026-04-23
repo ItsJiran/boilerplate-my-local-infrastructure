@@ -42,10 +42,17 @@ NGINX_TEMPLATE_ENV_ARGS=(
 # ----------------------------------------------------------
 # Step 3: Run the dns workflow to setup dns records for the application
 
+source ./.env
+# source ./.env.devops
+
+NGINX_TEMPLATE_ENV_ARGS=(
+	-E .env
+	# -E .env.devops
+)
 ./run.sh run.dev.ssl.sh --domains="${PHPMYADMIN_DOMAIN},${GRAFANA_DOMAIN},${S3_DOMAIN},${S3_CONSOLE_DOMAIN},${PORTAINER_DOMAIN}" --output-dir="./infra-generated/ssl"
 
-cp ./infra-generated/ssl/*.crt /etc/nginx/ssl/
-cp ./infra-generated/ssl/*.key /etc/nginx/ssl/
+sudo cp ./infra-generated/ssl/*.crt /etc/nginx/ssl/
+sudo cp ./infra-generated/ssl/*.key /etc/nginx/ssl/
 
 ./run.sh run.dev.ssl.ca.sh
 
@@ -54,74 +61,74 @@ cp ./infra-generated/ssl/*.key /etc/nginx/ssl/
 # ----------------------------------------------------------
 # Step 4: Buat template untuk nginx-host (vps) 
 
+source ./.env
+# source ./.env.devops
+
+NGINX_TEMPLATE_ENV_ARGS=(
+	-E .env
+	# -E .env.devops
+)
+
 ./setup.sh setup-nginx-template.sh -f \
 	-o infra-generated/nginx/default.conf.vps.template \
 	-t infra/nginx/templates/vps/app.conf \
 	"${NGINX_TEMPLATE_ENV_ARGS[@]}" \
 	-v \
-	SSL_CERT_PATH="/etc/nginx/ssl/${REVERB_DOMAIN}.crt" \
-	SSL_KEY_PATH="/etc/nginx/ssl/${REVERB_DOMAIN}.key" \
-	LOAD_BALANCER_PORT="${LOAD_BALANCER_PORT:-80}"
+	APP_DOMAIN="${PHPMYADMIN_DOMAIN}" \
+	SSL_CERT_PATH="/etc/nginx/ssl/${PHPMYADMIN_DOMAIN}.crt" \
+	SSL_KEY_PATH="/etc/nginx/ssl/${PHPMYADMIN_DOMAIN}.key" \
+	LOAD_BALANCER_PORT="${PHPMYADMIN_PORT}"
 
-if [ -n "${REVERB_URL:-}" ]; then
-	./setup.sh setup-nginx-template.sh -a \
-		-o infra-generated/nginx/default.conf.vps.template \
-		-t infra/nginx/templates/vps/reverb.conf \
-		"${NGINX_TEMPLATE_ENV_ARGS[@]}" \
-		-v \
-		SSL_CERT_PATH="/etc/nginx/ssl/${REVERB_DOMAIN}.crt" \
-		SSL_KEY_PATH="/etc/nginx/ssl/${REVERB_DOMAIN}.key" \
-		LOAD_BALANCER_PORT="${LOAD_BALANCER_PORT:-80}"
-fi
-
-if [ -n "${HMR_URL:-}" ]; then
-	./setup.sh setup-nginx-template.sh -a \
-		-o infra-generated/nginx/default.conf.vps.template \
-		-t infra/nginx/templates/vps/hmr.conf \
-		"${NGINX_TEMPLATE_ENV_ARGS[@]}" \
-		-v \
-		SSL_CERT_PATH="/etc/nginx/ssl/${HMR_DOMAIN}.crt" \
-		SSL_KEY_PATH="/etc/nginx/ssl/${HMR_DOMAIN}.key" \
-		LOAD_BALANCER_PORT="${LOAD_BALANCER_PORT:-80}"
-fi
-
-# ----------------------------------------------------------
-# Step 5: Konfigurasi nginx untuk nginx-lb (docker) 
-
-./setup.sh setup-nginx-template.sh -f \
-	-o infra/nginx/default.conf.lb.template \
-	-t infra/nginx/templates/base.conf \
+./setup.sh setup-nginx-template.sh -a \
+	-o infra-generated/nginx/default.conf.vps.template \
+	-t infra/nginx/templates/vps/app.conf \
 	"${NGINX_TEMPLATE_ENV_ARGS[@]}" \
+	-v \
+	APP_DOMAIN="${GRAFANA_DOMAIN}" \
+	SSL_CERT_PATH="/etc/nginx/ssl/${GRAFANA_DOMAIN}.crt" \
+	SSL_KEY_PATH="/etc/nginx/ssl/${GRAFANA_DOMAIN}.key" \
+	LOAD_BALANCER_PORT="${GRAFANA_PORT}"
 
 ./setup.sh setup-nginx-template.sh -a \
-	-o infra/nginx/default.conf.lb.template \
-	-t infra/nginx/templates/reverb.conf \
-	"${NGINX_TEMPLATE_ENV_ARGS[@]}"
+	-o infra-generated/nginx/default.conf.vps.template \
+	-t infra/nginx/templates/vps/app.conf \
+	"${NGINX_TEMPLATE_ENV_ARGS[@]}" \
+	-v \
+	APP_DOMAIN="${S3_DOMAIN}" \
+	SSL_CERT_PATH="/etc/nginx/ssl/${S3_DOMAIN}.crt" \
+	SSL_KEY_PATH="/etc/nginx/ssl/${S3_DOMAIN}.key" \
+	LOAD_BALANCER_PORT="8888"
 
 ./setup.sh setup-nginx-template.sh -a \
-	-o infra/nginx/default.conf.lb.template \
-	-t infra/nginx/templates/hmr.conf \
-	"${NGINX_TEMPLATE_ENV_ARGS[@]}"
+	-o infra-generated/nginx/default.conf.vps.template \
+	-t infra/nginx/templates/vps/custom.conf \
+	"${NGINX_TEMPLATE_ENV_ARGS[@]}" \
+	-v \
+	PORT_HTTP="${S3_PORT}" \
+	PORT_HTTPS="${S3_CONSOLE_PORT}" \
+	APP_DOMAIN="${S3_DOMAIN}" \
+	SSL_CERT_PATH="/etc/nginx/ssl/${S3_DOMAIN}.crt" \
+	SSL_KEY_PATH="/etc/nginx/ssl/${S3_DOMAIN}.key" \
+	LOAD_BALANCER_PORT="8889"
 
-# ----------------------------------------------------------
-# Step 6: Setup the host template into the etc nginx and also setup to the host file (for local development)
+./setup.sh setup-nginx-template.sh -a \
+	-o infra-generated/nginx/default.conf.vps.template \
+	-t infra/nginx/templates/vps/app.conf \
+	"${NGINX_TEMPLATE_ENV_ARGS[@]}" \
+	-v \
+	APP_DOMAIN="${S3_CONSOLE_DOMAIN}" \
+	SSL_CERT_PATH="/etc/nginx/ssl/${S3_CONSOLE_DOMAIN}.crt" \
+	SSL_KEY_PATH="/etc/nginx/ssl/${S3_CONSOLE_DOMAIN}.key" \
+	LOAD_BALANCER_PORT="8889"
 
-# ./setup.sh setup-hosts.sh
-# ./setup.sh setup-nginx-file-to-host-conf.sh
+./setup.sh setup-nginx-template.sh -a \
+	-o infra-generated/nginx/default.conf.vps.template \
+	-t infra/nginx/templates/vps/app.conf \
+	"${NGINX_TEMPLATE_ENV_ARGS[@]}" \
+	-v \
+	APP_DOMAIN="${PORTAINER_DOMAIN}" \
+	SSL_CERT_PATH="/etc/nginx/ssl/${PORTAINER_DOMAIN}.crt" \
+	SSL_KEY_PATH="/etc/nginx/ssl/${PORTAINER_DOMAIN}.key" \
+	LOAD_BALANCER_PORT="${PORTAINER_PORT}"
 
-# ----------------------------------------------------------
-# Step 7: Deploy the application workflow
-
-APP_SERVICES_BOOTSTRAP="redis"
-APP_SERVICES_RUNTIME="app app-hmr app-worker app-socket app-cron load_balancer"
-
-./run.sh run.app.sh up --build --one-by-one $APP_SERVICES_BOOTSTRAP
-./run.sh run.app.sh up --build --one-by-one $APP_SERVICES_RUNTIME
-
-echo "✅ Setup complete. Services are up and ready."
-
-
-# ----------------------------------------------------------
-# Step 8: Jalanin test untuk memastikan semuanya berjalan dengan baik (opsional)
-
-./run.sh test.sh
+sudo cp "infra-generated/nginx/default.conf.vps.template" "/etc/nginx/sites-enabled/local-infra.conf"

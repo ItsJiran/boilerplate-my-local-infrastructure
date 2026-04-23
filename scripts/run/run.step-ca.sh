@@ -13,6 +13,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 ROOT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 INFRA_DIR="$ROOT_DIR/infra"
+COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
 
 # Banner
 echo -e "${CYAN}"
@@ -48,6 +49,7 @@ export STEP_CA_PROVISIONER=${STEP_CA_PROVISIONER:-"admin"}
 export STEP_CA_PASSWORD=${STEP_CA_PASSWORD:-"changeme"}
 export STEP_CA_ADMIN=${STEP_CA_ADMIN:-"admin@jiran.test"}
 export STEP_CA_ADDRESS=${STEP_CA_ADDRESS:-":9000"}
+CONTAINER_NAME="${APP_SLUG:-app-boilerplate}-step-ca"
 
 # Check if network exists
 echo -e "${BLUE}Checking Docker network...${NC}"
@@ -109,9 +111,9 @@ echo -e "${GREEN}Starting Step CA server...${NC}"
 echo ""
 
 # Start Docker Compose
-cd "$INFRA_DIR"
-echo "$INFRA_DIR"
-docker compose -f docker-compose.step-ca.yml up -d
+cd "$ROOT_DIR"
+echo "$COMPOSE_FILE"
+docker compose -f "$COMPOSE_FILE" up -d step-ca
 
 if [ $? -eq 0 ]; then
     echo ""
@@ -124,12 +126,12 @@ if [ $? -eq 0 ]; then
     echo -e "  Health Check:   ${GREEN}https://localhost:$STEP_CA_PORT/health${NC}"
     echo ""
     echo -e "${YELLOW}Useful Commands:${NC}"
-    echo -e "  View logs:      ${BLUE}docker logs -f step-ca${NC}"
-    echo -e "  Stop server:    ${BLUE}cd $INFRA_DIR && docker compose -f docker-compose.step-ca.yml down${NC}"
-    echo -e "  Restart:        ${BLUE}cd $INFRA_DIR && docker compose -f docker-compose.step-ca.yml restart${NC}"
+    echo -e "  View logs:      ${BLUE}docker logs -f $CONTAINER_NAME${NC}"
+    echo -e "  Stop server:    ${BLUE}cd $ROOT_DIR && docker compose -f docker-compose.yml stop step-ca${NC}"
+    echo -e "  Restart:        ${BLUE}cd $ROOT_DIR && docker compose -f docker-compose.yml restart step-ca${NC}"
     echo ""
     echo -e "${YELLOW}Initialize Step CLI (first time):${NC}"
-    echo -e "  ${BLUE}step-cli ca bootstrap --ca-url https://localhost:$STEP_CA_PORT --fingerprint \$(docker exec step-ca step certificate fingerprint /home/step/certs/root_ca.crt)${NC}"
+    echo -e "  ${BLUE}step-cli ca bootstrap --ca-url https://localhost:$STEP_CA_PORT --fingerprint \$(docker exec $CONTAINER_NAME step certificate fingerprint /home/step/certs/root_ca.crt)${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
     echo ""
     
@@ -138,11 +140,11 @@ if [ $? -eq 0 ]; then
     sleep 5
     
     echo ""
-    docker ps --filter "name=step-ca" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    docker ps --filter "name=$CONTAINER_NAME" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
     echo ""
 else
     echo ""
     echo -e "${RED}✗ Failed to start Step CA server${NC}"
-    echo -e "${YELLOW}Check logs with: docker logs step-ca${NC}"
+    echo -e "${YELLOW}Check logs with: docker logs $CONTAINER_NAME${NC}"
     exit 1
 fi
